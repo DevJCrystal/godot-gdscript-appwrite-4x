@@ -60,12 +60,10 @@ func _ready():
 	var email = "test_user_%d@example.com" % random_id
 	var password = "password123"
 	print("Attempting to create user: " + email)
-
-	# 2. Call the create function from your Singleton
-	# "unique()" tells Appwrite to auto-generate the user ID
+	# Create user. "unique()" tells Appwrite to auto-generate the user ID.
 	var response: Dictionary = await Appwrite.account.create("unique()", email, password)
 	
-	# 3. Check the result
+	# Validate
 	if int(response.get("status_code", 0)) != 201:
 		print("❌ FAILED creating user.")
 		print("Status Code: ", response.get("status_code", 0))
@@ -80,7 +78,7 @@ func _ready():
 	print("Name: ", created.get("name", ""))
 	print("Registration: ", created.get("registration", ""))
 
-	# 4. Create a session (login). This should set cookies.
+	# Login (creates a session cookie)
 	print("Attempting login (create email session)...")
 	var session_response: Dictionary = await Appwrite.account.create_email_session(email, password)
 	if int(session_response.get("status_code", 0)) != 201:
@@ -94,7 +92,7 @@ func _ready():
 	var sess: Dictionary = sess_data if typeof(sess_data) == TYPE_DICTIONARY else {}
 	print("Session ID: ", sess.get("$id", "<missing>"))
 
-	# 5. Fetch current account (proves cookie/session works).
+	# Verify session by fetching the current account
 	print("Fetching current account (/account)...")
 	var me_response: Dictionary = await Appwrite.account.get_account()
 	if int(me_response.get("status_code", 0)) != 200:
@@ -109,7 +107,7 @@ func _ready():
 	print("Me ID: ", me2.get("$id", "<missing>"))
 	print("Me Email: ", me2.get("email", "<missing>"))
 
-	# 6. Logout (delete current session).
+	# Optional: logout + verify session removal
 	if Helpers.should_logout():
 		print("Logging out (delete current session)...")
 		var logout_response: Dictionary = await Appwrite.account.delete_session("current")

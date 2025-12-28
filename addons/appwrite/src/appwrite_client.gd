@@ -6,7 +6,7 @@ var account: AppwriteAccount
 var functions: AppwriteFunctions
 var databases: AppwriteDatabases
 
-## The base Appwrite Client that handles configuration and network requests.
+## Appwrite client: configuration + HTTP wrapper.
 
 # Configuration
 var _project_id: String = ""
@@ -26,10 +26,10 @@ var _headers: Dictionary = {
 }
 
 func _ready():
-	# 1. Load the .env file
+	# Load .env (optional)
 	EnvLoader.load_env("res://.env")
 	
-	# 2. Get the values from the Environment
+	# Read environment variables
 	var env_endpoint = OS.get_environment("APPWRITE_ENDPOINT")
 	var env_project = OS.get_environment("APPWRITE_PROJECT_ID")
 	var env_key = OS.get_environment("APPWRITE_KEY")
@@ -37,7 +37,7 @@ func _ready():
 	var env_persist_session = OS.get_environment("APPWRITE_DEBUG_PERSIST_SESSION")
 	var env_debug_http = OS.get_environment("APPWRITE_DEBUG_HTTP")
 
-	# 3. CRITICAL STEP: Update variables with safety checks
+	# Apply overrides (if set)
 	if not env_endpoint.is_empty():
 		set_endpoint(env_endpoint.strip_edges())
 		
@@ -47,8 +47,7 @@ func _ready():
 	if not env_key.is_empty():
 		set_key(env_key.strip_edges())
 
-	# FIXED: Robust Boolean Check
-	# This handles "True", "true ", "TRUE", and "1"
+	# Parse APPWRITE_SELF_SIGNED as a bool ("true"/"1")
 	var clean_signed = env_self_signed.strip_edges().to_lower()
 	if clean_signed == "true" or clean_signed == "1":
 		set_self_signed(true)
@@ -62,11 +61,11 @@ func _ready():
 	var clean_debug = env_debug_http.strip_edges().to_lower()
 	_debug_http = clean_debug == "true" or clean_debug == "1"
 	
-	# 4. Debug Print
+	# Log effective configuration (useful while wiring up env vars)
 	print("--- DEBUG CONFIGURATION ---")
 	print("Endpoint (Applied): ", _endpoint)
 	print("Project ID (Applied): ", _project_id)
-	print("Self Signed Mode: ", _self_signed) # <--- VERIFY THIS IS TRUE
+	print("Self Signed Mode: ", _self_signed)
 	print("Persist Session: ", _persist_session)
 	print("Debug HTTP: ", _debug_http)
 	print("---------------------------")
@@ -135,14 +134,14 @@ func set_self_signed(status: bool) -> AppwriteClient:
 ## Generic method to make an HTTP request to the Appwrite API.
 ## Returns a Dictionary with "status_code" (int) and "data" (Variant).
 func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {}, body: Variant = null) -> Dictionary:
-	# 1. Create a temporary HTTPRequest node for this specific call
+	# Create a one-off HTTPRequest for this call
 	var http = HTTPRequest.new()
 	add_child(http)
 	
 	# Wait for the node to be ready in the scene tree
 	await get_tree().process_frame
 	
-	# 2. Merge default headers with custom request headers
+	# Merge default headers with request-specific headers
 	var request_headers = _headers.duplicate()
 	for key in headers:
 		request_headers[key] = headers[key]
@@ -158,22 +157,18 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 	for key in request_headers:
 		header_array.append(key + ": " + request_headers[key])
 
-	# 3. Prepare Body
+	# JSON body
 	var json_body = ""
 	if body != null:
 		json_body = JSON.stringify(body)
 
-	# 4. Execute Request
+	# Full URL
 	var full_url = _endpoint + path
 	
 	# TLS configuration
-	# IMPORTANT: Some CDNs (Fastly) require SNI to route the request to the correct
-	# certificate. If SNI is missing (common when the client connects using the
-	# resolved IP internally), you'll see TLS handshake failures in strict mode,
-	# or HTTP 421 in unsafe mode.
-	#
-	# Passing `common_name_override` forces Godot's TLS layer to validate (and
-	# typically send SNI for) the expected hostname.
+	# TLS/SNI: Appwrite Cloud endpoints sit behind a CDN and require SNI to route to
+	# the correct certificate. `common_name_override` makes TLS validation use the
+	# expected hostname (and triggers SNI in Godot).
 	if full_url.begins_with("https://"):
 		var host_for_tls := _extract_hostname(full_url)
 		if _self_signed:
@@ -197,7 +192,7 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 		http.queue_free()
 		return {"status_code": 0, "data": "Internal Error: HTTP Request failed to start."}
 
-	# 5. Await Response
+	# Await response
 	# response is [result, response_code, headers, body]
 	var response = await http.request_completed
 	
@@ -230,7 +225,7 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 		http.queue_free()
 		return {"status_code": 0, "data": error_msg}
 	
-	# 6. Parse Result
+	# Parse result
 	var result_data
 	var json = JSON.new()
 	var parse_result = json.parse(response_body.get_string_from_utf8())
@@ -246,7 +241,7 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 	
 	return {
 		"status_code": response_code,
-		"headers": response_headers, # Important for Cookies later!
+		"headers": response_headers,
 		"data": result_data
 	}
 

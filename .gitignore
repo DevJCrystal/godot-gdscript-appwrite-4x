@@ -4,6 +4,7 @@
 
 # Godot resource UIDs (optional)
 *.uid
+*.import
 
 # Local secrets
 .env

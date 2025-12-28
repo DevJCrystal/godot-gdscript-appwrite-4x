@@ -26,7 +26,7 @@ func get_database(database_id: String) -> Dictionary:
 
 # -------------------------------------------------------------------------
 # Tables (Appwrite Console terminology)
-# NOTE: Appwrite REST routes still use "/collections".
+# Appwrite REST routes still use "/collections".
 # -------------------------------------------------------------------------
 
 func list_tables(database_id: String, queries: Array = []) -> Dictionary:
