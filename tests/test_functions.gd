@@ -1,5 +1,14 @@
 extends Node
 
+signal finished(result: Dictionary)
+
+func _finish(ok: bool, skipped: bool = false, details: Dictionary = {}) -> void:
+	var out := details.duplicate()
+	out["name"] = "Functions"
+	out["ok"] = ok
+	out["skipped"] = skipped
+	emit_signal("finished", out)
+
 func _ready():
 	print("--- Starting Appwrite Functions Test ---")
 	
@@ -8,6 +17,7 @@ func _ready():
 		print("⚠️ Skipping: APPWRITE_FUNCTION_ID is not set.")
 		print("Set it in your .env, e.g.: APPWRITE_FUNCTION_ID=yourFunctionId")
 		print("--- Test Finished ---")
+		_finish(true, true, {"reason": "APPWRITE_FUNCTION_ID not set"})
 		return
 
 	# Optional: authenticate first (useful if your function execute permissions are for logged-in users only).
@@ -26,6 +36,7 @@ func _ready():
 				print("Status Code: ", login_resp.get("status_code", 0))
 				print("Error: ", login_resp.get("data", {}))
 				print("--- Test Finished ---")
+				_finish(false, false, {"error": login_resp.get("data", {})})
 				return
 			print("✅ Logged in.")
 	else:
@@ -42,6 +53,7 @@ func _ready():
 		print("Status Code: ", exec_resp.get("status_code", 0))
 		print("Error: ", exec_resp.get("data", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": exec_resp.get("data", {})})
 		return
 
 	print("✅ Execution created.")
@@ -70,3 +82,4 @@ func _ready():
 	print("Errors: ", data.get("errors", ""))
 
 	print("--- Test Finished ---")
+	_finish(true)

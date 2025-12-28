@@ -1,8 +1,8 @@
 [gd_scene load_steps=2 format=3 uid="uid://dynclrbjwx5c2"]
 
-[ext_resource type="Script" uid="uid://djqgjwbpwiu7b" path="res://tests/test_big.gd" id="1_1"]
+[ext_resource type="Script" uid="uid://b878y5np4jtv" path="res://tests/test_e2e.gd" id="1_1"]
 
-[node name="TestBig" type="Control"]
+[node name="TestE2E" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

@@ -1,6 +1,14 @@
 class_name EnvLoader
 extends RefCounted
 
+static func _is_sensitive_key(key: String) -> bool:
+	var k := key.to_upper()
+	return k.find("PASSWORD") != -1 \
+		or k.find("SECRET") != -1 \
+		or k.find("TOKEN") != -1 \
+		or k == "APPWRITE_KEY" \
+		or k.ends_with("_KEY")
+
 static func load_env(path: String = "res://.env") -> void:
 	if not FileAccess.file_exists(path):
 		printerr("EnvLoader: .env file not found at ", path)
@@ -26,4 +34,7 @@ static func load_env(path: String = "res://.env") -> void:
 				
 			# Inject into Godot's environment map
 			OS.set_environment(key, value)
-			print("EnvLoader: Loaded ", key)
+			if _is_sensitive_key(key):
+				print("EnvLoader: Loaded ", key, " (redacted)")
+			else:
+				print("EnvLoader: Loaded ", key)

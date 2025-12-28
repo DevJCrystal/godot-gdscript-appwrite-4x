@@ -22,6 +22,16 @@ func _print_docs_summary(label: String, docs_arr: Array) -> void:
 		else:
 			print("- ", id_str, " testing=", testing_str)
 
+
+signal finished(result: Dictionary)
+
+func _finish(ok: bool, skipped: bool = false, details: Dictionary = {}) -> void:
+	var out := details.duplicate()
+	out["name"] = "Queries"
+	out["ok"] = ok
+	out["skipped"] = skipped
+	emit_signal("finished", out)
+
 func _ready():
 	print("--- Starting Appwrite Queries Test ---")
 	randomize()
@@ -31,6 +41,7 @@ func _ready():
 	if database_id.is_empty() or table_id.is_empty():
 		print("⚠️ Skipping: APPWRITE_DATABASE_ID / APPWRITE_TABLE_ID not set.")
 		print("--- Test Finished ---")
+		_finish(true, true, {"reason": "Missing APPWRITE_DATABASE_ID / APPWRITE_TABLE_ID"})
 		return
 
 	# Login (reuse session if available)
@@ -40,6 +51,7 @@ func _ready():
 		print("Status Code: ", auth.get("status_code", 0))
 		print("Error: ", auth.get("error", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": auth.get("error", {})})
 		return
 	print("✅ Authenticated. Reused session=", auth.get("reused", false))
 	var print_docs_json: bool = _env_bool("APPWRITE_TEST_PRINT_DOCS_JSON", false)
@@ -48,6 +60,7 @@ func _ready():
 	print("--- 0) list_documents() with NO queries ---")
 	var baseline: Dictionary = await Appwrite.databases.list_documents(database_id, table_id)
 	print("Status: ", baseline.get("status_code", 0))
+	var ok := true
 	if int(baseline.get("status_code", 0)) == 200:
 		var baseline_data: Variant = baseline.get("data")
 		var baseline_dict: Dictionary = baseline_data if typeof(baseline_data) == TYPE_DICTIONARY else {}
@@ -68,6 +81,7 @@ func _ready():
 			print(JSON.stringify(docs_arr, "  "))
 	else:
 		print("Error: ", baseline.get("data", {}))
+		ok = false
 
 	# Create a marker document so we can query for it.
 	var doc_marker := "QueryTest %d" % (randi() % 1000000)
@@ -78,6 +92,7 @@ func _ready():
 		print("Status Code: ", created.get("status_code", 0))
 		print("Error: ", created.get("data", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": created.get("data", {})})
 		return
 	var created_data: Variant = created.get("data")
 	var created_dict: Dictionary = created_data if typeof(created_data) == TYPE_DICTIONARY else {}
@@ -94,6 +109,7 @@ func _ready():
 	print("Status: ", filtered.get("status_code", 0))
 	if int(filtered.get("status_code", 0)) != 200:
 		print("Error: ", filtered.get("data", {}))
+		ok = false
 	else:
 		var f_data: Variant = filtered.get("data")
 		var f_dict: Dictionary = f_data if typeof(f_data) == TYPE_DICTIONARY else {}
@@ -107,6 +123,20 @@ func _ready():
 			f_docs_arr = f_docs_v as Array
 		print("Total=", f_total_str, " returned=", f_docs_arr.size())
 		_print_docs_summary("Docs (filtered):", f_docs_arr)
+
+		var found := false
+		for d in f_docs_arr:
+			if typeof(d) != TYPE_DICTIONARY:
+				continue
+			var doc := d as Dictionary
+			if str(doc.get("$id", "")) == doc_id:
+				found = true
+				break
+		if found:
+			print("✅ Query matched marker doc.")
+		else:
+			print("❌ Query did not match marker doc (unexpected).")
+		ok = ok and found
 		if print_docs_json:
 			print("Docs (filtered JSON):")
 			print(JSON.stringify(f_docs_arr, "  "))
@@ -115,5 +145,8 @@ func _ready():
 	print("Cleaning up marker document...")
 	var deleted: Dictionary = await Appwrite.databases.delete_document(database_id, table_id, doc_id)
 	print("Delete status: ", deleted.get("status_code", 0))
+	if int(deleted.get("status_code", 0)) != 204:
+		ok = false
 
 	print("--- Queries Test Finished ---")
+	_finish(ok)

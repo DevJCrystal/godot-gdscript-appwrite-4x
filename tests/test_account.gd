@@ -2,6 +2,15 @@ extends Node
 
 const Helpers := preload("res://tests/test_helpers.gd")
 
+signal finished(result: Dictionary)
+
+func _finish(ok: bool, skipped: bool = false, details: Dictionary = {}) -> void:
+	var out := details.duplicate()
+	out["name"] = "Accounts"
+	out["ok"] = ok
+	out["skipped"] = skipped
+	emit_signal("finished", out)
+
 func _ready():
 	print("--- Starting Appwrite Account Test ---")
 	randomize()
@@ -23,6 +32,7 @@ func _ready():
 			print("Status Code: ", auth.get("status_code", 0))
 			print("Error: ", auth.get("error", {}))
 			print("--- Test Finished ---")
+			_finish(false, false, {"error": auth.get("error", {})})
 			return
 		var me_resp: Dictionary = auth.get("me", {})
 		var me_data: Variant = me_resp.get("data")
@@ -40,6 +50,7 @@ func _ready():
 				print("Status Code: ", logout_resp.get("status_code", 0))
 				print("Error Message: ", logout_resp.get("data", {}))
 				print("--- Test Finished ---")
+				_finish(false, false, {"error": logout_resp.get("data", {})})
 				return
 			print("✅ SUCCESS! Logged out.")
 
@@ -53,6 +64,7 @@ func _ready():
 				print("Response: ", me_after_logout.get("data", {}))
 
 		print("--- Test Finished ---")
+		_finish(true)
 		return
 
 	# Fallback: Create a random user (original behavior).
@@ -69,6 +81,7 @@ func _ready():
 		print("Status Code: ", response.get("status_code", 0))
 		print("Error Message: ", response.get("data", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": response.get("data", {})})
 		return
 
 	print("✅ SUCCESS! User created.")
@@ -86,6 +99,7 @@ func _ready():
 		print("Status Code: ", session_response.get("status_code", 0))
 		print("Error Message: ", session_response.get("data", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": session_response.get("data", {})})
 		return
 	print("✅ SUCCESS! Session created.")
 	var sess_data: Variant = session_response.get("data")
@@ -100,6 +114,7 @@ func _ready():
 		print("Status Code: ", me_response.get("status_code", 0))
 		print("Error Message: ", me_response.get("data", {}))
 		print("--- Test Finished ---")
+		_finish(false, false, {"error": me_response.get("data", {})})
 		return
 	print("✅ SUCCESS! Current account returned.")
 	var me_data2: Variant = me_response.get("data")
@@ -116,6 +131,7 @@ func _ready():
 			print("Status Code: ", logout_response.get("status_code", 0))
 			print("Error Message: ", logout_response.get("data", {}))
 			print("--- Test Finished ---")
+			_finish(false, false, {"error": logout_response.get("data", {})})
 			return
 		print("✅ SUCCESS! Logged out.")
 
@@ -130,3 +146,4 @@ func _ready():
 			print("Response: ", me_after_logout.get("data", {}))
 
 	print("--- Test Finished ---")
+	_finish(true)

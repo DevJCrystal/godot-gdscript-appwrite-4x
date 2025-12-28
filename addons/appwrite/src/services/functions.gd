@@ -101,6 +101,6 @@ func _with_queries(path: String, queries: Array) -> String:
 	var sep := "?"
 	var out := path
 	for q in queries:
-		out += "%squeries[]=%s" % [sep, str(q)]
+		out += "%squeries[]=%s" % [sep, str(q).uri_encode()]
 		sep = "&"
 	return out

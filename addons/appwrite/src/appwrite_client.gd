@@ -5,6 +5,7 @@ extends Node
 var account: AppwriteAccount
 var functions: AppwriteFunctions
 var databases: AppwriteDatabases
+var storage: AppwriteStorage
 
 ## Appwrite client: configuration + HTTP wrapper.
 
@@ -33,6 +34,7 @@ func _ready():
 	var env_endpoint = OS.get_environment("APPWRITE_ENDPOINT")
 	var env_project = OS.get_environment("APPWRITE_PROJECT_ID")
 	var env_key = OS.get_environment("APPWRITE_KEY")
+	var env_enable_key = OS.get_environment("APPWRITE_ENABLE_API_KEY")
 	var env_self_signed = OS.get_environment("APPWRITE_SELF_SIGNED")
 	var env_persist_session = OS.get_environment("APPWRITE_DEBUG_PERSIST_SESSION")
 	var env_debug_http = OS.get_environment("APPWRITE_DEBUG_HTTP")
@@ -43,8 +45,13 @@ func _ready():
 		
 	if not env_project.is_empty():
 		set_project(env_project.strip_edges())
-		
-	if not env_key.is_empty():
+
+	# API keys are intentionally opt-in (client-safe by default).
+	# If you really want to use X-Appwrite-Key (server-side tooling), set:
+	#   APPWRITE_ENABLE_API_KEY=true
+	var clean_enable_key := env_enable_key.strip_edges().to_lower()
+	var enable_key := clean_enable_key == "true" or clean_enable_key == "1" or clean_enable_key == "yes" or clean_enable_key == "y"
+	if enable_key and not env_key.is_empty():
 		set_key(env_key.strip_edges())
 
 	# Parse APPWRITE_SELF_SIGNED as a bool ("true"/"1")
@@ -68,6 +75,12 @@ func _ready():
 	print("Self Signed Mode: ", _self_signed)
 	print("Persist Session: ", _persist_session)
 	print("Debug HTTP: ", _debug_http)
+	if enable_key and not _api_key.is_empty():
+		print("API Key: enabled (X-Appwrite-Key will be sent)")
+	elif not env_key.is_empty():
+		print("API Key: present but ignored (set APPWRITE_ENABLE_API_KEY=true to enable)")
+	else:
+		print("API Key: disabled")
 	print("---------------------------")
 
 	# Ensure HTTPS can validate certificates on platforms where Godot
@@ -81,6 +94,7 @@ func _ready():
 	account = AppwriteAccount.new(self)
 	functions = AppwriteFunctions.new(self)
 	databases = AppwriteDatabases.new(self)
+	storage = AppwriteStorage.new(self)
 
 
 func _ensure_trusted_ca_configured() -> void:
@@ -157,15 +171,19 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 	for key in request_headers:
 		header_array.append(key + ": " + request_headers[key])
 
-	# JSON body
-	var json_body = ""
+	# Request body
+	var json_body := ""
+	var raw_body: PackedByteArray = PackedByteArray()
+	var use_raw_body := false
 	if body != null:
-		json_body = JSON.stringify(body)
+		if typeof(body) == TYPE_PACKED_BYTE_ARRAY:
+			use_raw_body = true
+			raw_body = body as PackedByteArray
+		else:
+			json_body = JSON.stringify(body)
 
 	# Full URL
-	var full_url = _endpoint + path
-	
-	# TLS configuration
+	var full_url := _endpoint + path
 	# TLS/SNI: Appwrite Cloud endpoints sit behind a CDN and require SNI to route to
 	# the correct certificate. `common_name_override` makes TLS validation use the
 	# expected hostname (and triggers SNI in Godot).
@@ -184,14 +202,20 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 		if full_url.begins_with("https://"):
 			print("DEBUG: TLS host override: ", _extract_hostname(full_url))
 		print("DEBUG: Headers: ", header_array)
-		print("DEBUG: Body: ", json_body)
+		if use_raw_body:
+			print("DEBUG: Body bytes=", raw_body.size())
+		else:
+			print("DEBUG: Body: ", json_body)
 	
-	var error = http.request(full_url, header_array, method, json_body)
+	var error := OK
+	if use_raw_body:
+		error = http.request_raw(full_url, header_array, method, raw_body)
+	else:
+		error = http.request(full_url, header_array, method, json_body)
 	
 	if error != OK:
 		http.queue_free()
 		return {"status_code": 0, "data": "Internal Error: HTTP Request failed to start."}
-
 	# Await response
 	# response is [result, response_code, headers, body]
 	var response = await http.request_completed
@@ -226,15 +250,25 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 		return {"status_code": 0, "data": error_msg}
 	
 	# Parse result
-	var result_data
-	var json = JSON.new()
-	var parse_result = json.parse(response_body.get_string_from_utf8())
-	
-	if parse_result == OK:
-		result_data = json.data
-	else:
-		# Fallback if response isn't JSON (e.g. empty 204 response or raw error)
+	var result_data: Variant = null
+	var content_type := _get_header_value(response_headers, "content-type")
+	var is_json := _is_json_content_type(content_type)
+	var is_text := _is_text_content_type(content_type)
+
+	# If server didn't provide content-type, keep the old behavior and attempt JSON parse.
+	if content_type.is_empty() or is_json:
+		var json = JSON.new()
+		var parse_result = json.parse(response_body.get_string_from_utf8())
+		if parse_result == OK:
+			result_data = json.data
+		else:
+			# Fallback if response isn't JSON (e.g. empty 204 response)
+			result_data = response_body.get_string_from_utf8()
+	elif is_text:
 		result_data = response_body.get_string_from_utf8()
+	else:
+		# Binary payload (downloads). Callers should use `body_bytes`.
+		result_data = ""
 	
 	# Clean up the node
 	http.queue_free()
@@ -242,6 +276,7 @@ func call_api(method: HTTPClient.Method, path: String, headers: Dictionary = {},
 	return {
 		"status_code": response_code,
 		"headers": response_headers,
+		"body_bytes": response_body,
 		"data": result_data
 	}
 
@@ -365,3 +400,35 @@ func _extract_hostname(url: String) -> String:
 	if colon_idx != -1:
 		return authority.substr(0, colon_idx)
 	return authority
+
+
+func _get_header_value(headers: PackedStringArray, name_lower: String) -> String:
+	# Headers arrive as raw lines, e.g. "Content-Type: application/json".
+	# Returns the first matching value, lower/upper case-insensitive.
+	for header_line in headers:
+		var line := str(header_line)
+		var idx := line.find(":")
+		if idx <= 0:
+			continue
+		var key := line.substr(0, idx).strip_edges().to_lower()
+		if key != name_lower:
+			continue
+		return line.substr(idx + 1).strip_edges()
+	return ""
+
+
+func _is_json_content_type(content_type: String) -> bool:
+	if content_type.is_empty():
+		return false
+	var ct := content_type.to_lower()
+	if ct.find("application/json") != -1 or ct.find("text/json") != -1:
+		return true
+	# e.g. application/problem+json
+	return ct.find("+json") != -1
+
+
+func _is_text_content_type(content_type: String) -> bool:
+	if content_type.is_empty():
+		return false
+	var ct := content_type.to_lower()
+	return ct.begins_with("text/")

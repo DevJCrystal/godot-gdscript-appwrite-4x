@@ -4,7 +4,7 @@ An Appwrite Cloud client SDK for Godot 4.5+ written in GDScript.
 
 - Endpoint: supports Appwrite Cloud region endpoints like `https://nyc.cloud.appwrite.io/v1`
 - Auth: client-safe session auth via cookies (no embedded API key)
-- Services implemented so far: **Account**, **Databases**, **Functions**
+- Services implemented so far: **Account**, **Databases**, **Functions**, **Storage**
 
 ## Install
 
@@ -79,6 +79,16 @@ Implemented in `addons/appwrite/src/services/functions.gd`.
 - Poll/wait for execution to reach a terminal status (`wait_for_execution()`)
 - Returns execution output (`responseStatusCode`, `responseBody`) when available
 
+### ✅ Storage
+
+Implemented in `addons/appwrite/src/services/storage.gd`.
+
+- List buckets / get bucket
+- List files / get file metadata
+- Upload file (multipart) from bytes or from disk
+- Download file bytes (`body_bytes`)
+- Delete files
+
 ## Tests / Debug scenes
 
 This repo includes Godot scenes under `tests/` that run end-to-end flows.
@@ -86,8 +96,9 @@ This repo includes Godot scenes under `tests/` that run end-to-end flows.
 - `tests/test_accounts.tscn`: account flows
 - `tests/test_databases.tscn`: document CRUD
 - `tests/test_functions.tscn`: function execution + wait
+- `tests/test_storage.tscn`: upload/download/delete against a bucket
 - `tests/test_queries.tscn`: query diagnostics (baseline list + filtered list)
-- `tests/test_big.tscn`: end-to-end “big test”
+- `tests/test_e2e.tscn`: end-to-end test
 
 Useful env flags:
 
@@ -99,3 +110,4 @@ Useful env flags:
 
 - No API keys are embedded in the client.
 - Privileged operations should be done via Appwrite **Functions**.
+- If `APPWRITE_KEY` is present in your `.env`, it is ignored unless you also set `APPWRITE_ENABLE_API_KEY=true`.
