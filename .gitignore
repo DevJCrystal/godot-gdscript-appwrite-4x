@@ -2,5 +2,8 @@
 .godot/
 /android/
 
+# Godot resource UIDs (optional)
+*.uid
+
 # Local secrets
 .env
