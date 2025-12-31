@@ -1,0 +1,53 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_ui.gd" id="1_1"]
+
+[node name="TestUI" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_1")
+
+[node name="Root" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Left" type="VBoxContainer" parent="Root"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(260, 0)
+
+[node name="StatusLabel" type="Label" parent="Root/Left"]
+unique_name_in_owner = true
+text = "Status:"
+
+[node name="RunAllButton" type="Button" parent="Root/Left"]
+unique_name_in_owner = true
+text = "Run All (excluding E2E)"
+
+[node name="ClearButton" type="Button" parent="Root/Left"]
+unique_name_in_owner = true
+text = "Clear Log"
+
+[node name="ButtonsRoot" type="VBoxContainer" parent="Root/Left"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Right" type="VBoxContainer" parent="Root"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="LogScroll" type="ScrollContainer" parent="Root/Right"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Log" type="RichTextLabel" parent="Root/Right/LogScroll"]
+unique_name_in_owner = true
+fit_content = true
+scroll_active = true
+bbcode_enabled = false

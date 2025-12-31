@@ -4,7 +4,7 @@ An Appwrite Cloud client SDK for Godot 4.5+ written in GDScript.
 
 - Endpoint: supports Appwrite Cloud region endpoints like `https://nyc.cloud.appwrite.io/v1`
 - Auth: client-safe session auth via cookies (no embedded API key)
-- Services implemented so far: **Account**, **Databases**, **Functions**, **Storage**
+- Services implemented so far: **Account**, **Databases**, **Functions**, **Storage**, **Realtime**
 
 ## Install
 
@@ -34,6 +34,32 @@ This project uses environment variables loaded from a local `.env` file.
 
 Important:
 - `.env` is ignored by git on purpose (it contains secrets).
+
+### Minimal `.env` (just to connect)
+
+If you only want the client to initialize and make basic requests:
+
+- `APPWRITE_PROJECT_ID`
+- `APPWRITE_ENDPOINT`
+
+Optional (only if you’re developing against a self-signed instance):
+
+- `APPWRITE_SELF_SIGNED=true`
+
+### Tests / realtime `.env` (end-to-end)
+
+If you want to run the included test scenes and realtime examples, you’ll typically also set:
+
+- `APPWRITE_DATABASE_ID`, `APPWRITE_TABLE_ID`
+- `APPWRITE_STORAGE_BUCKET_ID` (storage tests)
+- `APPWRITE_FUNCTION_ID` (functions tests)
+- `APPWRITE_TEST_EMAIL`, `APPWRITE_TEST_PASSWORD` (most tests + database realtime)
+
+Useful debug toggles while iterating:
+
+- `APPWRITE_DEBUG_PERSIST_SESSION=true`
+- `APPWRITE_DEBUG_HTTP=true`
+- `APPWRITE_DEBUG_REALTIME=true`
 
 ## Quick start
 
@@ -89,6 +115,31 @@ Implemented in `addons/appwrite/src/services/storage.gd`.
 - Download file bytes (`body_bytes`)
 - Delete files
 
+### ✅ Realtime
+
+Implemented in `addons/appwrite/src/services/realtime.gd`.
+
+- WebSocket-based subscriptions (`Appwrite.realtime.subscribe([...], callback)`)
+- Session auth via the same cookie jar used for REST calls
+- Automatically reconnects when the subscribed channel set changes
+
+Example:
+
+```gdscript
+var channel := "databases.%s.collections.%s.documents" % [db_id, table_id]
+var sub_id := Appwrite.realtime.subscribe([channel], func (msg: Dictionary) -> void:
+	print(msg)
+)
+
+# Later:
+Appwrite.realtime.unsubscribe(sub_id)
+
+# Only call this if you want to explicitly tear down the socket (e.g. app quit).
+# In most games you keep the connection open and just subscribe/unsubscribe
+# when the player joins/leaves a match.
+# Appwrite.realtime.disconnect_now()
+```
+
 ## Tests / Debug scenes
 
 This repo includes Godot scenes under `tests/` that run end-to-end flows.
@@ -99,11 +150,23 @@ This repo includes Godot scenes under `tests/` that run end-to-end flows.
 - `tests/test_storage.tscn`: upload/download/delete against a bucket
 - `tests/test_queries.tscn`: query diagnostics (baseline list + filtered list)
 - `tests/test_e2e.tscn`: end-to-end test
+- `tests/test_ui.tscn`: simple UI runner (buttons + results log)
+- `tests/test_realtime_player_docs.tscn`: live top-5 leaderboard UI (read-only)
+
+## Examples
+
+- `examples/realtime_monitor.tscn`: subscribes to a collection channel and prints every realtime message.
+
+Env vars:
+
+- Either set `APPWRITE_REALTIME_CHANNEL` to a full channel string, OR set `APPWRITE_DATABASE_ID` + `APPWRITE_TABLE_ID`.
+- If the channel requires auth (common for databases), also set `APPWRITE_TEST_EMAIL` + `APPWRITE_TEST_PASSWORD`.
 
 Useful env flags:
 
 - `APPWRITE_DEBUG_PERSIST_SESSION=true` keeps a cookie jar on disk to reduce repeated logins.
 - `APPWRITE_DEBUG_HTTP=true` prints request details from the client.
+- `APPWRITE_DEBUG_REALTIME=true` prints realtime WebSocket state + frames.
 - `APPWRITE_TEST_PRINT_DOCS_JSON=true` prints full document JSON in the query test.
 
 ## Security / design constraints

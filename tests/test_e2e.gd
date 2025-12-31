@@ -6,6 +6,7 @@ const _TESTS: Array[Dictionary] = [
 	{"name": "Accounts", "scene": "res://tests/test_accounts.tscn"},
 	{"name": "Databases", "scene": "res://tests/test_databases.tscn"},
 	{"name": "Functions", "scene": "res://tests/test_functions.tscn"},
+	{"name": "Realtime", "scene": "res://tests/test_realtime.tscn"},
 	{"name": "Queries", "scene": "res://tests/test_queries.tscn"},
 	{"name": "Storage", "scene": "res://tests/test_storage.tscn"},
 ]

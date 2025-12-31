@@ -6,6 +6,7 @@ var account: AppwriteAccount
 var functions: AppwriteFunctions
 var databases: AppwriteDatabases
 var storage: AppwriteStorage
+var realtime: AppwriteRealtime
 
 ## Appwrite client: configuration + HTTP wrapper.
 
@@ -95,6 +96,10 @@ func _ready():
 	functions = AppwriteFunctions.new(self)
 	databases = AppwriteDatabases.new(self)
 	storage = AppwriteStorage.new(self)
+
+	# Realtime is a Node (WebSocket poll loop), so keep it as a child.
+	realtime = AppwriteRealtime.new(self)
+	add_child(realtime)
 
 
 func _ensure_trusted_ca_configured() -> void:
