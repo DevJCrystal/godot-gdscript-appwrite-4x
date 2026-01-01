@@ -70,6 +70,164 @@ var res: Dictionary = await Appwrite.account.get_current()
 print(res.get("status_code"), res.get("data"))
 ```
 
+## Service examples
+
+All service calls return a `Dictionary` with:
+
+- `status_code` (int): HTTP status code (or `0` for local/network failures)
+- `data` (Variant): decoded JSON response (usually a Dictionary)
+- sometimes `body_bytes` for binary downloads (see Storage)
+
+If you want a consistent pattern for handling responses, this small helper keeps example code tidy:
+
+```gdscript
+func _require_ok(resp: Dictionary, ok_codes: Array[int] = [200, 201, 204]) -> bool:
+	var code := int(resp.get("status_code", 0))
+	if ok_codes.has(code):
+		return true
+
+	# status_code == 0 means the request failed locally (DNS/TLS/timeout/etc).
+	push_error("Appwrite request failed (%d): %s" % [code, str(resp.get("data"))])
+	return false
+```
+
+### Account (login + current user)
+
+```gdscript
+# Login (creates a cookie session)
+var login := await Appwrite.account.create_email_session(
+	OS.get_environment("APPWRITE_TEST_EMAIL"),
+	OS.get_environment("APPWRITE_TEST_PASSWORD")
+)
+
+if not _require_ok(login, [201]):
+	return
+
+# Fetch current user
+var me := await Appwrite.account.get_current()
+print("me status=", me.get("status_code"))
+print("me data=", me.get("data"))
+
+# Logout (optional)
+# await Appwrite.account.delete_session("current")
+```
+
+### Databases (list + create + update + queries)
+
+```gdscript
+var db_id := OS.get_environment("APPWRITE_DATABASE_ID")
+var table_id := OS.get_environment("APPWRITE_TABLE_ID")
+
+# List the latest 10 documents ordered by bestScore
+var list := await Appwrite.databases.list_documents(db_id, table_id, [
+	Query.order_desc("bestScore"),
+	Query.limit(10)
+])
+print("list status=", list.get("status_code"))
+
+# Create a document (documentId can be "unique()")
+var created := await Appwrite.databases.create_document(
+	db_id,
+	table_id,
+	"unique()",
+	{
+		"bestScore": 123,
+		"note": "hello from godot"
+	}
+)
+print("create status=", created.get("status_code"))
+
+# Update a document
+var doc_id := str(created.get("data", {}).get("$id", ""))
+if not doc_id.is_empty():
+	var updated := await Appwrite.databases.update_document(
+		db_id,
+		table_id,
+		doc_id,
+		{"bestScore": 200}
+	)
+	print("update status=", updated.get("status_code"))
+
+# Filter example: only docs where userId equals a value
+# var filtered := await Appwrite.databases.list_documents(db_id, table_id, [
+# 	Query.equal("userId", "some-user-id")
+# ])
+```
+
+### Storage (upload + download + delete)
+
+```gdscript
+var bucket_id := OS.get_environment("APPWRITE_STORAGE_BUCKET_ID")
+
+# Upload a file from disk (fileId can be "unique()")
+var upload := await Appwrite.storage.create_file(
+	bucket_id,
+	"unique()",
+	"res://icon.svg"
+)
+print("upload status=", upload.get("status_code"))
+
+var file_id := str(upload.get("data", {}).get("$id", ""))
+if not file_id.is_empty():
+	# Download raw bytes
+	var dl := await Appwrite.storage.download_file(bucket_id, file_id)
+	var bytes := dl.get("body_bytes", PackedByteArray()) as PackedByteArray
+	print("download status=", dl.get("status_code"), " bytes=", bytes.size())
+
+	# Delete
+	var del := await Appwrite.storage.delete_file(bucket_id, file_id)
+	print("delete status=", del.get("status_code"))
+```
+
+### Functions (execute + wait for completion)
+
+```gdscript
+var function_id := OS.get_environment("APPWRITE_FUNCTION_ID")
+
+# Trigger an execution (body can be a Dictionary; it will be JSON-stringified)
+var exec := await Appwrite.functions.create_execution(function_id, {
+	"hello": "world",
+	"time": Time.get_unix_time_from_system()
+})
+
+if int(exec.get("status_code", 0)) != 201:
+	push_error("Execution create failed: %s" % [str(exec.get("data"))])
+	return
+
+var execution_id := str(exec.get("data", {}).get("$id", ""))
+
+# Wait for it to reach completed/failed/canceled
+var final := await Appwrite.functions.wait_for_execution(function_id, execution_id, 60_000)
+print("final status=", final.get("status_code"))
+print("execution=", final.get("data"))
+```
+
+### Realtime (subscribe to document events)
+
+```gdscript
+var db_id := OS.get_environment("APPWRITE_DATABASE_ID")
+var table_id := OS.get_environment("APPWRITE_TABLE_ID")
+
+# This channel receives create/update/delete events for documents in the collection.
+var channel := "databases.%s.collections.%s.documents" % [db_id, table_id]
+
+# If your collection requires auth, login first (see Account example).
+var sub_id := Appwrite.realtime.subscribe([channel], func (msg: Dictionary) -> void:
+	# Typical event payload:
+	# { events:[], channels:[], timestamp:"...", payload:{...}, type:"event" }
+	var payload: Variant = msg.get("payload")
+	print("realtime events=", msg.get("events"))
+	print("payload=", payload)
+)
+
+# Later, unsubscribe when you no longer need updates.
+# Appwrite.realtime.unsubscribe(sub_id)
+
+# Only call this if you want to explicitly tear down the socket (e.g. app quit).
+# In most games you keep the connection open and just subscribe/unsubscribe.
+# Appwrite.realtime.disconnect_now()
+```
+
 ## Current progress
 
 ### ✅ Accounts
